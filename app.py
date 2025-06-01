@@ -4,78 +4,85 @@ import pandas as pd
 import json
 from datetime import datetime
 
-st.set_page_config(page_title="June Study Tracker", page_icon="🎮", layout="centered")
+st.set_page_config(page_title="RPG打卡中心", page_icon="📆", layout="centered")
+st.title("🎮 暑期学习 RPG 打卡系统（6–8月）")
 
-st.title("📆 2025年6月 RPG化学习任务打卡表")
+# 月份选择器
+month = st.selectbox("📅 选择学习月份", ["6月", "7月", "8月"])
+month_map = {"6月": 6, "7月": 7, "8月": 8}
+month_num = month_map[month]
 
-# 加载每日任务数据
+# 任务数据生成函数
 @st.cache_data
-def load_data():
-    data = [
-        {"date": "2025-06-01", "phase": "CS50P Review + Shorts", "main": "完成CS50P Week9视频", "side": "练习class/property"},
-        {"date": "2025-06-02", "phase": "CS50P Review + Shorts", "main": "观看Shorts并做笔记", "side": "回顾之前代码"},
-        {"date": "2025-06-03", "phase": "CS50P Review + Shorts", "main": "挑选Final项目方向", "side": "整理CS50P Markdown"},
-    ]
-    # 自动生成 6/4 - 6/30（已压缩逻辑简写）
-    from datetime import timedelta
-    base_date = datetime.strptime("2025-06-04", "%Y-%m-%d")
-    for i in range(27):
-        d = base_date + timedelta(days=i)
+def generate_tasks(month):
+    task_list = []
+    base_date = datetime(2025, month, 1)
+    for i in range(30 if month != 8 else 31):  # 6,7月30天；8月31天
+        d = base_date.replace(day=i+1)
         day = d.day
-        if day <= 7:
-            phase = "CS50P Review + Shorts"
-            main = ["完成CS50P Week9视频", "观看Shorts并做笔记", "挑选Final项目方向"][i % 3]
-            side = ["练习class/property", "回顾之前代码", "整理CS50P Markdown"][i % 3]
-        elif day <= 14:
-            phase = "SQL 基础学习"
-            main = ["学习SELECT语句", "GROUP BY与聚合", "练习JOIN与子查询"][i % 3]
-            side = ["使用CS50 IDE练习", "总结SQL语法", "做一个SQL小练习"][i % 3]
-        elif day <= 21:
-            phase = "UCI项目分析实战"
-            main = ["加载student数据", "分析字段特征", "绘图+初步结论"][i % 3]
-            side = ["写Markdown记录", "画heatmap", "计算相关性系数"][i % 3]
-        else:
-            phase = "项目收尾"
-            main = ["撰写分析总结", "整理Notebook", "上传到GitHub"][i % 3]
-            side = ["写结论段", "封面页美化", "发给朋友请教反馈"][i % 3]
-        data.append({
+        if month == 6:
+            if day <= 7:
+                phase, main, side = "CS50P Review", "完成CS50P Week9视频", "整理CS50P笔记"
+            elif day <= 14:
+                phase, main, side = "SQL 学习", "掌握SELECT/WHERE", "写SQL练习"
+            elif day <= 21:
+                phase, main, side = "UCI分析项目", "分析字段分布", "画图初探"
+            else:
+                phase, main, side = "项目总结", "撰写报告", "上传GitHub"
+        elif month == 7:
+            if day <= 10:
+                phase, main, side = "pandas进阶", "学习groupby+merge", "练习pivot_table"
+            elif day <= 20:
+                phase, main, side = "数据可视化", "制作交互图表", "熟练Plotly/seaborn"
+            else:
+                phase, main, side = "行为分析项目", "完成电商分析", "输出图文报告"
+        else:  # 8月
+            if day <= 10:
+                phase, main, side = "ML入门", "学习train/test split", "理解过拟合"
+            elif day <= 20:
+                phase, main, side = "建模实战", "用随机森林建模", "做准确率评估"
+            else:
+                phase, main, side = "模型总结", "报告撰写+GitHub", "学习模型调参"
+        task_list.append({
             "date": d.strftime("%Y-%m-%d"),
             "phase": phase,
             "main": main,
             "side": side
         })
-    return pd.DataFrame(data)
+    return pd.DataFrame(task_list)
 
-df = load_data()
+df = generate_tasks(month_num)
 today = datetime.now().strftime("%Y-%m-%d")
-today_tasks = df[df["date"] == today]
+today_row = df[df["date"] == today]
 
-if today_tasks.empty:
-    st.info("🎉 今天不是 6 月学习日程内的一天，或你已完成所有任务！")
-else:
-    row = today_tasks.iloc[0]
-    st.subheader(f"📅 今天是：{row['date']} - {row['phase']}")
+if not today_row.empty:
+    row = today_row.iloc[0]
+    st.subheader(f"📅 今天：{row['date']} - {row['phase']}")
     st.write(f"🎯 主线任务：{row['main']}")
     st.write(f"🧩 支线任务：{row['side']}")
+else:
+    st.info(f"🌙 当前选择的是 {month}，今天没有任务")
 
-    # 加载或保存进度
-    try:
-        with open("progress.json", "r") as f:
-            progress = json.load(f)
-    except:
-        progress = {}
+# 打卡进度管理
+progress_file = f"progress_{month}.json"
+try:
+    with open(progress_file, "r") as f:
+        progress = json.load(f)
+except:
+    progress = {}
 
-    done = progress.get(row["date"], False)
-    checked = st.checkbox("✅ 我已完成今天的任务", value=done)
-
+# 今日任务打卡
+if not today_row.empty:
+    done = progress.get(today, False)
+    checked = st.checkbox("✅ 今日任务完成", value=done)
     if checked and not done:
-        progress[row["date"]] = True
-        with open("progress.json", "w") as f:
+        progress[today] = True
+        with open(progress_file, "w") as f:
             json.dump(progress, f)
-        st.success("打卡成功！XP +10 🎉")
+        st.success("打卡成功！🎉")
 
-    # 显示总进度
-    total = len(df)
-    finished = sum(1 for v in progress.values() if v)
-    st.progress(finished / total)
-    st.caption(f"⭐ 当前进度：{finished}/{total} 天已完成")
+# 总进度显示
+total = len(df)
+finished = sum(1 for v in progress.values() if v)
+st.progress(finished / total)
+st.caption(f"⭐ 当前进度：{finished}/{total} 天完成")
